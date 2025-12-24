@@ -5,11 +5,7 @@ import { Search, Menu, X, PlayCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
-import { usePathname } from "next/navigation";
-
 export default function Navbar() {
-    const pathname = usePathname();
-    const isWatchPage = pathname?.startsWith("/watch");
     const [isScrolled, setIsScrolled] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -26,12 +22,10 @@ export default function Navbar() {
         return () => window.removeEventListener("scroll", handleScroll);
     }, []);
 
-    if (isWatchPage) return null;
-
     return (
         <nav
             className={cn(
-                "fixed top-0 z-50 w-full transition-all duration-300",
+                "fixed top-0 z-50 w-full transition-all duration-300 hidden md:block",
                 isScrolled
                     ? "bg-background/80 backdrop-blur-md border-b border-white/10"
                     : "bg-gradient-to-b from-black/80 to-transparent"
