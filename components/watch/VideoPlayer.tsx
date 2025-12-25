@@ -20,7 +20,7 @@ import {
     List
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Hls from "hls.js";
 import { storageService, VideoItem } from "@/lib/services/StorageService";
 
@@ -77,6 +77,9 @@ export default function VideoPlayer({
     onEpisodeChange,
 }: VideoPlayerProps) {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const isAutoPlay = searchParams.get('autoplay') === '1';
+
     const videoRef = useRef<HTMLVideoElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const hlsRef = useRef<Hls | null>(null);
@@ -87,8 +90,8 @@ export default function VideoPlayer({
     const [duration, setDuration] = useState(0);
     const [playbackRate, setPlaybackRate] = useState(1.0);
 
-    // UI state
-    const [showControls, setShowControls] = useState(true);
+    // UI state - start hidden if auto-play
+    const [showControls, setShowControls] = useState(!isAutoPlay);
     const [activeDrawer, setActiveDrawer] = useState<"episodes" | "settings" | null>(null);
 
     // User Data State
@@ -101,6 +104,8 @@ export default function VideoPlayer({
     // Long Press for Speed
     const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
     const isLongPressingRef = useRef(false);
+    const isAutoPlayingRef = useRef(false);
+    const firstAutoPlayRef = useRef(isAutoPlay);
 
     // Quality & Subtitle state
     const [availableQualities, setAvailableQualities] = useState<
@@ -140,8 +145,8 @@ export default function VideoPlayer({
     // ==========================================================================
     // Auto-hide controls
     // ==========================================================================
-    const resetControlsTimeout = useCallback(() => {
-        setShowControls(true);
+    const resetControlsTimeout = useCallback((show: boolean = true) => {
+        if (show) setShowControls(true);
         if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
 
         // Only auto-hide if playing and no drawer is open
@@ -174,10 +179,21 @@ export default function VideoPlayer({
 
     useEffect(() => {
         if (playing) {
-            resetControlsTimeout();
+            // If it's the first auto-play, keep controls hidden
+            if (firstAutoPlayRef.current) {
+                resetControlsTimeout(false);
+                firstAutoPlayRef.current = false;
+            } else {
+                resetControlsTimeout(true);
+            }
+            // Reset auto-play flag once new video starts
+            isAutoPlayingRef.current = false;
         } else {
-            setShowControls(true);
-            if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+            // Don't show controls if auto-playing to next episode or waiting for initial auto-play
+            if (!isAutoPlayingRef.current && !firstAutoPlayRef.current) {
+                setShowControls(true);
+                if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+            }
         }
     }, [playing, resetControlsTimeout]);
 
@@ -238,11 +254,12 @@ export default function VideoPlayer({
     const previousEpisode = currentIndex > 0 ? sortedEpisodes[currentIndex - 1] : null;
     const nextEpisode = currentIndex < sortedEpisodes.length - 1 ? sortedEpisodes[currentIndex + 1] : null;
 
-    const navigateToEpisode = (episodeNumber: number) => {
+    const navigateToEpisode = (episodeNumber: number, autoplay: boolean = false) => {
         if (onEpisodeChange) {
             onEpisodeChange(episodeNumber);
         } else {
-            router.push(`/watch/${source}/${dramaId}/${episodeNumber}`);
+            const url = `/watch/${source}/${dramaId}/${episodeNumber}${autoplay ? '?autoplay=1' : ''}`;
+            router.push(url);
         }
         setActiveDrawer(null); // Close drawer on nav
     };
@@ -256,6 +273,31 @@ export default function VideoPlayer({
         e?.stopPropagation();
         if (nextEpisode) navigateToEpisode(nextEpisode.episodeNumber);
     };
+
+    const handleVideoEnded = () => {
+        // Auto-play next episode if available
+        if (nextEpisode) {
+            isAutoPlayingRef.current = true;
+            navigateToEpisode(nextEpisode.episodeNumber, true);
+        } else {
+            setPlaying(false);
+        }
+    };
+
+    // Auto-play when coming from previous episode
+    useEffect(() => {
+        if (isAutoPlay && videoRef.current) {
+            const playVideo = () => {
+                videoRef.current?.play().catch(() => { });
+            };
+            // Try to play when video is ready
+            if (videoRef.current.readyState >= 2) {
+                playVideo();
+            } else {
+                videoRef.current.addEventListener('canplay', playVideo, { once: true });
+            }
+        }
+    }, [isAutoPlay]);
 
     // ==========================================================================
     // Event Handlers
@@ -404,7 +446,7 @@ export default function VideoPlayer({
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={handleLoadedMetadata}
                 onClick={togglePlay}
-                onEnded={() => setPlaying(false)}
+                onEnded={handleVideoEnded}
                 playsInline
                 crossOrigin="anonymous"
             />
@@ -500,7 +542,7 @@ export default function VideoPlayer({
                 {/* Interactive Bottom Bar (Always Accessible) */}
                 <div className="pointer-events-auto flex flex-col gap-3">
                     {/* Seek Bar & Time */}
-                    <div className="flex items-center gap-3">
+                    <div className={`flex items-center gap-3 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-30 hover:opacity-100'}`}>
                         <div className="relative flex-1 group flex items-center">
                             {/* Time Tooltip on Thumb */}
                             <div
@@ -516,7 +558,7 @@ export default function VideoPlayer({
                                 max={duration || 100}
                                 value={currentTime}
                                 onChange={handleSeek}
-                                className="flex-1 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary relative z-10"
+                                className="flex-1 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-md relative z-10"
                             />
                         </div>
                         <span className="text-white/90 text-xs font-mono whitespace-nowrap">
@@ -524,10 +566,10 @@ export default function VideoPlayer({
                         </span>
                     </div>
 
-                    {/* Total Episode Button (Triggers Drawer) - HIDDEN ON MOBILE */}
+                    {/* Total Episode Button (Triggers Drawer) - VISIBLE ON MOBILE - FADES WITH CONTROLS */}
                     <button
                         onClick={() => setActiveDrawer('episodes')}
-                        className="hidden md:flex items-center justify-between w-full bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-lg px-4 py-3 transition-colors group"
+                        className={`flex items-center justify-between w-full bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-lg px-4 py-3 transition-colors duration-300 group ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                     >
                         <div className="flex items-center gap-3">
                             <List className="w-5 h-5 text-white/70" />
