@@ -2,7 +2,7 @@
 // Aggregator Service - Fetches, normalizes, stores and caches videos from all sources
 // =============================================================================
 
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, lt, or } from "drizzle-orm";
 import { db, getDb, videos, videoStats, type Video, type NewVideo } from "../db";
 import { cacheService, CacheService } from "../cache/redis";
 import { streamService, SUPPORTED_SOURCES } from "./StreamService";
@@ -20,6 +20,12 @@ export interface AggregatedVideosResult {
     videos: VideoWithStats[];
     total: number;
     sources: SourceType[];
+}
+
+export interface CursorPaginatedResult {
+    videos: VideoWithStats[];
+    nextCursor: string | null;
+    hasMore: boolean;
 }
 
 // =============================================================================
@@ -214,6 +220,106 @@ export class AggregatorService {
         }
 
         return response;
+    }
+
+    /**
+     * Get videos with cursor-based pagination
+     * Cursor format: "timestamp:id" (e.g., "1703487600000:42")
+     * Uses (createdAt, id) for stable ordering - O(1) performance unlike OFFSET
+     */
+    async getVideosByCursor(options: {
+        limit?: number;
+        cursor?: string | null;
+        source?: SourceType;
+        sortBy?: "latest" | "popular" | "rating";
+    } = {}): Promise<CursorPaginatedResult> {
+        const { limit = 20, cursor, source, sortBy = "latest" } = options;
+
+        if (!db) {
+            return { videos: [], nextCursor: null, hasMore: false };
+        }
+
+        const database = getDb();
+
+        // Parse cursor if provided
+        let cursorTimestamp: Date | null = null;
+        let cursorId: number | null = null;
+
+        if (cursor) {
+            const [timestamp, id] = cursor.split(":");
+            cursorTimestamp = new Date(parseInt(timestamp, 10));
+            cursorId = parseInt(id, 10);
+        }
+
+        // Build base query with stats
+        const baseSelect = {
+            id: videos.id,
+            source: videos.source,
+            externalId: videos.externalId,
+            title: videos.title,
+            poster: videos.poster,
+            description: videos.description,
+            genres: videos.genres,
+            releaseYear: videos.releaseYear,
+            totalEpisodes: videos.totalEpisodes,
+            createdAt: videos.createdAt,
+            updatedAt: videos.updatedAt,
+            viewsTotal: sql<number>`COALESCE(${videoStats.viewsTotal}, 0)`,
+            views24h: sql<number>`COALESCE(${videoStats.views24h}, 0)`,
+        };
+
+        // Build where conditions
+        const conditions = [];
+
+        // Source filter
+        if (source) {
+            conditions.push(eq(videos.source, source));
+        }
+
+        // Cursor condition - for stable pagination with compound cursor
+        // We want items with (createdAt < cursorTimestamp) OR (createdAt = cursorTimestamp AND id < cursorId)
+        if (cursorTimestamp && cursorId) {
+            conditions.push(
+                or(
+                    lt(videos.createdAt, cursorTimestamp),
+                    and(
+                        eq(videos.createdAt, cursorTimestamp),
+                        lt(videos.id, cursorId)
+                    )
+                )
+            );
+        }
+
+        // Build query - fetch limit + 1 to check hasMore
+        let query = database
+            .select(baseSelect)
+            .from(videos)
+            .leftJoin(videoStats, eq(videos.id, videoStats.videoId))
+            .orderBy(desc(videos.createdAt), desc(videos.id))
+            .limit(limit + 1);
+
+        if (conditions.length > 0) {
+            query = query.where(and(...conditions)) as typeof query;
+        }
+
+        const result = await query;
+
+        // Check if there are more items
+        const hasMore = result.length > limit;
+        const videosToReturn = hasMore ? result.slice(0, limit) : result;
+
+        // Build next cursor from the last item
+        let nextCursor: string | null = null;
+        if (hasMore && videosToReturn.length > 0) {
+            const lastVideo = videosToReturn[videosToReturn.length - 1];
+            nextCursor = `${lastVideo.createdAt.getTime()}:${lastVideo.id}`;
+        }
+
+        return {
+            videos: videosToReturn as VideoWithStats[],
+            nextCursor,
+            hasMore,
+        };
     }
 
     /**

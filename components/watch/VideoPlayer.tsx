@@ -448,7 +448,9 @@ export default function VideoPlayer({
                 onClick={togglePlay}
                 onEnded={handleVideoEnded}
                 playsInline
-                crossOrigin="anonymous"
+                // Note: crossOrigin removed - DramaBox CDN doesn't support CORS for MP4 files
+                // Only add crossOrigin when using subtitles with CORS-enabled sources
+                {...(streamType === "hls" && subtitles.length > 0 ? { crossOrigin: "anonymous" } : {})}
             />
 
             {/* Speeed Up Indicator */}

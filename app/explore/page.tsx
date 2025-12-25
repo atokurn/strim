@@ -1,11 +1,34 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Search, Star, PlayCircle, Filter } from "lucide-react";
 import { SUPPORTED_SOURCES } from "@/lib/services/StreamService";
 import MovieCard from "@/components/shared/MovieCard";
+import VideoGrid from "@/components/explore/VideoGrid";
+import BackToTop from "@/components/shared/BackToTop";
+import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
 
+// =============================================================================
+// Types
+// =============================================================================
+interface Video {
+    id: string | number;
+    source: string;
+    title?: string;
+    name?: string;
+    poster?: string;
+    img?: string;
+    description?: string;
+    viewCount?: number;
+    viewsTotal?: number;
+    year?: string | number;
+    genres?: string[];
+}
+
+// =============================================================================
+// Explore Content Component
+// =============================================================================
 function ExploreContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -13,16 +36,19 @@ function ExploreContent() {
 
     // State for Peringkat
     const [rankSource, setRankSource] = useState("all");
-    const [rankings, setRankings] = useState([]);
+    const [rankings, setRankings] = useState < Video[] > ([]);
     const [loadingRank, setLoadingRank] = useState(true);
 
-    // State for Jelajah
+    // State for Jelajah (Infinite Scroll)
     const [exploreSort, setExploreSort] = useState("popular"); // popular | latest | rating
     const [exploreSource, setExploreSource] = useState("all");
     const [exploreGenre, setExploreGenre] = useState("all");
     const [exploreYear, setExploreYear] = useState("all");
-    const [exploreVideos, setExploreVideos] = useState([]);
-    const [loadingExplore, setLoadingExplore] = useState(true);
+    const [exploreVideos, setExploreVideos] = useState < Video[] > ([]);
+    const [loadingExplore, setLoadingExplore] = useState(false);
+    const [nextCursor, setNextCursor] = useState < string | null > (null);
+    const [hasMore, setHasMore] = useState(true);
+    const [initialLoadDone, setInitialLoadDone] = useState(false);
 
     // Fetch Rankings
     useEffect(() => {
@@ -43,42 +69,78 @@ function ExploreContent() {
         }
     }, [activeTab, rankSource]);
 
-    // Fetch Explore Content
-    useEffect(() => {
-        if (activeTab === "jelajah") {
-            setLoadingExplore(true);
-            // In a real app, these filters would be passed to API
-            // For now, we fetch all and filter client-side or use available params
-            let url = `/api/videos/all?limit=50`;
+    // Fetch Explore Content (Initial + Cursor-based)
+    const fetchExploreVideos = useCallback(async (cursor: string | null = null) => {
+        if (loadingExplore) return;
+
+        setLoadingExplore(true);
+
+        try {
+            let url = `/api/videos/explore?limit=20`;
+            if (cursor) url += `&cursor=${cursor}`;
             if (exploreSource !== "all") url += `&source=${exploreSource}`;
 
-            fetch(url)
-                .then(res => res.json())
-                .then(data => {
-                    let videos = data.data || [];
+            const res = await fetch(url);
+            const data = await res.json();
 
-                    // Client-side filtering/sorting for now since API is basic
-                    if (exploreYear !== "all") {
-                        // Creating fake years for demo since api doesn't return year
-                        // In real implementation, normalization should include year
-                    }
+            if (data.status === 200) {
+                const newVideos = data.data || [];
 
-                    // Sort
-                    if (exploreSort === "popular") {
-                        videos.sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0));
-                    } else if (exploreSort === "latest") {
-                        // optimizing for latest if possible
-                    }
+                if (cursor) {
+                    // Append to existing videos
+                    setExploreVideos(prev => [...prev, ...newVideos]);
+                } else {
+                    // Replace videos (initial load or filter change)
+                    setExploreVideos(newVideos);
+                }
 
-                    setExploreVideos(videos);
-                    setLoadingExplore(false);
-                })
-                .catch(err => {
-                    console.error("Failed to fetch explore:", err);
-                    setLoadingExplore(false);
-                });
+                setNextCursor(data.nextCursor);
+                setHasMore(data.hasMore);
+            }
+        } catch (err) {
+            console.error("Failed to fetch explore:", err);
+        } finally {
+            setLoadingExplore(false);
+            setInitialLoadDone(true);
         }
-    }, [activeTab, exploreSort, exploreSource, exploreGenre, exploreYear]);
+    }, [exploreSource, loadingExplore]);
+
+    // Initial load for Jelajah tab
+    useEffect(() => {
+        if (activeTab === "jelajah" && !initialLoadDone) {
+            fetchExploreVideos(null);
+        }
+    }, [activeTab, initialLoadDone, fetchExploreVideos]);
+
+    // Reset when filters change
+    useEffect(() => {
+        if (activeTab === "jelajah" && initialLoadDone) {
+            setExploreVideos([]);
+            setNextCursor(null);
+            setHasMore(true);
+            setInitialLoadDone(false);
+        }
+    }, [exploreSource, exploreSort, exploreGenre, exploreYear]);
+
+    // Load more handler for infinite scroll
+    const handleLoadMore = useCallback(async () => {
+        if (hasMore && nextCursor && !loadingExplore) {
+            await fetchExploreVideos(nextCursor);
+        }
+    }, [hasMore, nextCursor, loadingExplore, fetchExploreVideos]);
+
+    // Infinite scroll hook
+    const { sentinelRef, reset } = useInfiniteScroll({
+        onLoadMore: handleLoadMore,
+        hasMore,
+        isLoading: loadingExplore,
+        rootMargin: "200px", // Prefetch when 200px from bottom
+    });
+
+    // Reset observer when tab changes or filters change
+    useEffect(() => {
+        reset();
+    }, [activeTab, exploreSource, exploreSort, reset]);
 
 
     return (
@@ -137,7 +199,7 @@ function ExploreContent() {
                     </div>
                 )}
 
-                {/* Jelajah Tab */}
+                {/* Jelajah Tab with Infinite Scroll */}
                 {activeTab === "jelajah" && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                         {/* Filters Wrapper - Sticky */}
@@ -190,19 +252,46 @@ function ExploreContent() {
                             </div>
                         </div>
 
-                        {/* Grid Content */}
-                        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                            {loadingExplore ? (
-                                <div className="col-span-full text-center text-white/50 py-10">Loading explore...</div>
-                            ) : (
-                                exploreVideos.map(video => (
-                                    <MovieCard key={video.id} movie={video} />
-                                ))
-                            )}
-                        </div>
+                        {/* Video Grid with Infinite Scroll */}
+                        {!initialLoadDone && loadingExplore ? (
+                            <VideoGrid videos={[]} isLoading={true} />
+                        ) : (
+                            <>
+                                <VideoGrid
+                                    videos={exploreVideos}
+                                    isLoading={loadingExplore}
+                                    showSeparators={exploreVideos.length > 40}
+                                />
+
+                                {/* Sentinel element for IntersectionObserver */}
+                                {hasMore && (
+                                    <div
+                                        ref={sentinelRef}
+                                        className="h-10 flex items-center justify-center"
+                                    >
+                                        {loadingExplore && (
+                                            <div className="flex items-center gap-2 text-white/50 text-sm">
+                                                <div className="w-4 h-4 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
+                                                Loading more...
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* End of list indicator */}
+                                {!hasMore && exploreVideos.length > 0 && (
+                                    <div className="text-center py-8 text-white/30 text-sm">
+                                        You've reached the end
+                                    </div>
+                                )}
+                            </>
+                        )}
                     </div>
                 )}
             </div>
+
+            {/* Back to Top Button */}
+            <BackToTop threshold={500} />
         </div>
     );
 }
@@ -215,9 +304,18 @@ export default function ExplorePage() {
     );
 }
 
+// =============================================================================
 // Helper Components
+// =============================================================================
 
-function FilterPill({ label, active, onClick, variant = "primary" }) {
+interface FilterPillProps {
+    label: string;
+    active: boolean;
+    onClick: () => void;
+    variant?: "primary" | "secondary" | "outline";
+}
+
+function FilterPill({ label, active, onClick, variant = "primary" }: FilterPillProps) {
     let baseClass = "px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all border";
     let activeClass = "";
     let inactiveClass = "";
@@ -235,7 +333,12 @@ function FilterPill({ label, active, onClick, variant = "primary" }) {
     );
 }
 
-function RankingCard({ video, index }) {
+interface RankingCardProps {
+    video: Video;
+    index: number;
+}
+
+function RankingCard({ video, index }: RankingCardProps) {
     // Determine number color based on rank
     let numColor = "text-white/50";
     if (index === 1) numColor = "text-yellow-500";
@@ -254,7 +357,7 @@ function RankingCard({ video, index }) {
     );
 }
 
-function formatSourceName(source) {
+function formatSourceName(source: string): string {
     return source
         .split(/(?=[A-Z])|(?<=[a-z])(?=[A-Z])/)
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1))

@@ -74,9 +74,7 @@ export default function Navbar() {
     const [isScrolled, setIsScrolled] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-    // Hide Navbar on video playback pages
-    if (pathname?.startsWith("/watch")) return null;
-
+    // Effect for scroll detection - must be before any early returns
     useEffect(() => {
         const handleScroll = () => {
             if (window.scrollY > 0) {
@@ -89,6 +87,9 @@ export default function Navbar() {
         window.addEventListener("scroll", handleScroll);
         return () => window.removeEventListener("scroll", handleScroll);
     }, []);
+
+    // Hide Navbar on video playback pages - now AFTER all hooks
+    if (pathname?.startsWith("/watch")) return null;
 
     return (
         <nav
