@@ -102,6 +102,43 @@ export const videoStatsRelations = relations(videoStats, ({ one }) => ({
 }));
 
 // =============================================================================
+// Explore Index Table - Precomputed, denormalized for fast queries
+// NO JOINS NEEDED - all data is pre-aggregated
+// =============================================================================
+export const exploreIndex = pgTable(
+    "explore_index",
+    {
+        id: serial("id").primaryKey(),
+        source: varchar("source", { length: 50 }).notNull(),
+        externalId: varchar("external_id", { length: 100 }).notNull(),
+        title: text("title").notNull(),
+        poster: text("poster"),
+        description: text("description"),
+        genres: text("genres"), // JSON array
+        releaseYear: integer("release_year"),
+        totalEpisodes: integer("total_episodes"),
+        // Precomputed scores - NO runtime calculation needed
+        popularityScore: integer("popularity_score").default(0).notNull(),
+        latestScore: integer("latest_score").default(0).notNull(),
+        ratingScore: integer("rating_score").default(0).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        // Unique constraint to prevent duplicates
+        sourceExternalIdx: uniqueIndex("explore_source_external_idx").on(
+            table.source,
+            table.externalId
+        ),
+        // Indexes for fast sorted queries
+        popularityIdx: index("explore_popularity_idx").on(table.popularityScore),
+        latestIdx: index("explore_latest_idx").on(table.latestScore),
+        ratingIdx: index("explore_rating_idx").on(table.ratingScore),
+        sourceIdx: index("explore_source_idx").on(table.source),
+    })
+);
+
+// =============================================================================
 // TypeScript Types (inferred from schema)
 // =============================================================================
 export type Video = typeof videos.$inferSelect;
@@ -110,3 +147,6 @@ export type VideoStats = typeof videoStats.$inferSelect;
 export type NewVideoStats = typeof videoStats.$inferInsert;
 export type UserWatchHistory = typeof userWatchHistory.$inferSelect;
 export type NewUserWatchHistory = typeof userWatchHistory.$inferInsert;
+export type ExploreIndexEntry = typeof exploreIndex.$inferSelect;
+export type NewExploreIndexEntry = typeof exploreIndex.$inferInsert;
+

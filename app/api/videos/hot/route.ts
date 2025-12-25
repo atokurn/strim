@@ -1,27 +1,57 @@
 // =============================================================================
-// Hot Videos API Route
+// Hot Videos API Route - FAST precomputed queries
 // GET /api/videos/hot?limit=20
-// Returns videos with time-weighted 24h view scoring
-// LOCAL ONLY - no external API calls
+// NO JOINS - queries precomputed explore_index table (sorted by latestScore)
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { trendingService } from "@/lib/services/TrendingService";
+import { db } from "@/lib/db";
+import { exploreIndex } from "@/lib/db/schema";
+import { desc } from "drizzle-orm";
+import { cacheService } from "@/lib/cache/redis";
 
 export const revalidate = 60; // Cache for 1 minute
 
+const CACHE_KEY = "hot:top";
+const CACHE_TTL = 60;
+
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get("limit") || "20", 10);
+    const limit = Math.min(parseInt(searchParams.get("limit") || "20", 10), 50);
+
+    if (!db) {
+        return NextResponse.json({ status: 500, error: "Database not configured" }, { status: 500 });
+    }
 
     try {
-        const videos = await trendingService.getHot(Math.min(limit, 50));
+        // Check cache first
+        const cached = await cacheService.get<typeof exploreIndex.$inferSelect[]>(CACHE_KEY);
+        if (cached) {
+            return NextResponse.json({
+                status: 200,
+                data: cached.slice(0, limit),
+                count: Math.min(cached.length, limit),
+                cached: true,
+            });
+        }
+
+        // Simple indexed SELECT - no JOINs
+        // Hot = most recent (latestScore is timestamp-based)
+        const videos = await db
+            .select()
+            .from(exploreIndex)
+            .orderBy(desc(exploreIndex.latestScore), desc(exploreIndex.id))
+            .limit(limit);
+
+        // Cache results
+        await cacheService.set(CACHE_KEY, videos, CACHE_TTL);
 
         return NextResponse.json(
             {
                 status: 200,
                 data: videos,
                 count: videos.length,
+                cached: false,
             },
             {
                 headers: {
@@ -37,4 +67,3 @@ export async function GET(request: NextRequest) {
         );
     }
 }
-

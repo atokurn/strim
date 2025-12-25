@@ -86,6 +86,7 @@ function ExploreContent() {
 
             if (data.status === 200) {
                 const newVideos = data.data || [];
+                console.log("[Explore] Fetched videos:", newVideos.length, newVideos[0]); // Debug log
 
                 if (cursor) {
                     // Append to existing videos

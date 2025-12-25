@@ -3,11 +3,10 @@
 // NEVER calls external APIs - all data comes from local DB/Redis
 // =============================================================================
 
-import { cacheService, CacheService } from "@/lib/cache/redis";
+import { cacheService } from "@/lib/cache/redis";
 import { db } from "@/lib/db";
-import { videos, videoStats } from "@/lib/db/schema";
-import { desc, eq, and, sql, gt, inArray } from "drizzle-orm";
-import type { Video, VideoStats } from "@/lib/db/schema";
+import { exploreIndex, videos, videoStats } from "@/lib/db/schema";
+import { desc, eq, sql } from "drizzle-orm";
 
 // =============================================================================
 // Types
@@ -38,143 +37,94 @@ export interface CursorPaginatedResult {
 // =============================================================================
 class TrendingService {
     /**
-     * Get trending videos - sorted by total views
-     * 1. Try Redis sorted set first
-     * 2. Fallback to DB query
+     * Get trending videos (Popularity Score)
+     * Queries precomputed explore_index table
      */
     async getTrending(limit: number = 20): Promise<TrendingVideo[]> {
-        // Try Redis first
-        const redisResults = await cacheService.getTrendingScores(limit);
+        if (!db) return [];
 
-        if (redisResults.length > 0) {
-            // Fetch video details from DB for Redis keys
-            const videoKeys = redisResults.map((r) => r.key);
-            const videosFromDb = await this.getVideosByKeys(videoKeys);
+        const results = await db
+            .select()
+            .from(exploreIndex)
+            .orderBy(desc(exploreIndex.popularityScore), desc(exploreIndex.id))
+            .limit(limit);
 
-            // Merge scores from Redis
-            return videosFromDb.map((v) => {
-                const redisEntry = redisResults.find(
-                    (r) => r.key === CacheService.createVideoKey(v.source, v.externalId)
-                );
-                return {
-                    ...v,
-                    score: redisEntry?.score ?? v.viewsTotal,
-                };
-            });
-        }
-
-        // Fallback to DB
-        return this.getTrendingFromDb(limit);
+        return results.map(this.mapExploreIndexToTrending);
     }
 
     /**
-     * Get hot videos - time-weighted 24h views
-     * Uses exponential decay scoring from Redis
+     * Get hot/latest videos (Latest Score)
+     * Queries precomputed explore_index table
      */
     async getHot(limit: number = 20): Promise<TrendingVideo[]> {
-        // Try Redis first
-        const redisResults = await cacheService.getHotScores(limit);
+        if (!db) return [];
 
-        if (redisResults.length > 0) {
-            const videoKeys = redisResults.map((r) => r.key);
-            const videosFromDb = await this.getVideosByKeys(videoKeys);
+        const results = await db
+            .select()
+            .from(exploreIndex)
+            .orderBy(desc(exploreIndex.latestScore), desc(exploreIndex.id))
+            .limit(limit);
 
-            return videosFromDb.map((v) => {
-                const redisEntry = redisResults.find(
-                    (r) => r.key === CacheService.createVideoKey(v.source, v.externalId)
-                );
-                return {
-                    ...v,
-                    score: redisEntry?.score ?? v.views24h,
-                };
-            });
-        }
-
-        // Fallback to DB - use views_24h column
-        return this.getHotFromDb(limit);
+        return results.map(this.mapExploreIndexToTrending);
     }
 
     /**
      * Get explore videos with cursor-based pagination
-     * Cursor format: "timestamp:id"
+     * Queries precomputed explore_index table
      */
     async getExplore(options: {
         limit?: number;
         cursor?: string | null;
         source?: string;
-        sortBy?: "latest" | "popular" | "hot";
+        sortBy?: "latest" | "popular" | "rating";
     } = {}): Promise<CursorPaginatedResult> {
-        const { limit = 20, cursor, source, sortBy = "latest" } = options;
+        const { limit = 20, cursor, source, sortBy = "popular" } = options;
 
         if (!db) {
             return { videos: [], nextCursor: null, hasMore: false };
         }
 
+        // Determine sort column
+        const sortColumn = sortBy === "latest"
+            ? exploreIndex.latestScore
+            : sortBy === "rating"
+                ? exploreIndex.ratingScore
+                : exploreIndex.popularityScore;
+
         // Parse cursor
-        let cursorTimestamp: Date | null = null;
+        let cursorScore: number | null = null;
         let cursorId: number | null = null;
 
         if (cursor) {
-            const [ts, id] = cursor.split(":");
-            cursorTimestamp = new Date(parseInt(ts, 10));
-            cursorId = parseInt(id, 10);
+            const [scoreStr, idStr] = cursor.split(":");
+            cursorScore = parseInt(scoreStr, 10);
+            cursorId = parseInt(idStr, 10);
         }
 
         // Build query
         let query = db
-            .select({
-                id: videos.id,
-                source: videos.source,
-                externalId: videos.externalId,
-                title: videos.title,
-                poster: videos.poster,
-                description: videos.description,
-                genres: videos.genres,
-                releaseYear: videos.releaseYear,
-                totalEpisodes: videos.totalEpisodes,
-                createdAt: videos.createdAt,
-                viewsTotal: sql<number>`COALESCE(${videoStats.viewsTotal}, 0)`,
-                views24h: sql<number>`COALESCE(${videoStats.views24h}, 0)`,
-            })
-            .from(videos)
-            .leftJoin(videoStats, eq(videos.id, videoStats.videoId))
-            .limit(limit + 1); // +1 to check hasMore
+            .select()
+            .from(exploreIndex)
+            .limit(limit + 1);
 
         // Apply source filter
-        if (source) {
-            query = query.where(eq(videos.source, source)) as typeof query;
+        if (source && source !== "all") {
+            query = query.where(eq(exploreIndex.source, source)) as typeof query;
         }
 
         // Apply cursor condition
-        if (cursorTimestamp && cursorId) {
+        if (cursorScore !== null && cursorId !== null) {
+            // WHERE (score, id) < (cursorScore, cursorId)
             query = query.where(
-                sql`(${videos.createdAt}, ${videos.id}) < (${cursorTimestamp}, ${cursorId})`
+                sql`(${sortColumn}, ${exploreIndex.id}) < (${cursorScore}, ${cursorId})`
             ) as typeof query;
         }
 
         // Apply sorting
-        switch (sortBy) {
-            case "popular":
-                query = query.orderBy(
-                    desc(sql`COALESCE(${videoStats.viewsTotal}, 0)`),
-                    desc(videos.id)
-                ) as typeof query;
-                break;
-            case "hot":
-                query = query.orderBy(
-                    desc(sql`COALESCE(${videoStats.views24h}, 0)`),
-                    desc(videos.id)
-                ) as typeof query;
-                break;
-            case "latest":
-            default:
-                query = query.orderBy(desc(videos.createdAt), desc(videos.id)) as typeof query;
-                break;
-        }
+        query = query.orderBy(desc(sortColumn), desc(exploreIndex.id)) as typeof query;
 
         const results = await query;
 
-        // Check if there are more results
         const hasMore = results.length > limit;
         const videosToReturn = hasMore ? results.slice(0, limit) : results;
 
@@ -182,145 +132,42 @@ class TrendingService {
         let nextCursor: string | null = null;
         if (hasMore && videosToReturn.length > 0) {
             const lastVideo = videosToReturn[videosToReturn.length - 1];
-            nextCursor = `${lastVideo.createdAt.getTime()}:${lastVideo.id}`;
+            const scoreVal = sortBy === "latest"
+                ? lastVideo.latestScore
+                : sortBy === "rating"
+                    ? lastVideo.ratingScore
+                    : lastVideo.popularityScore;
+            nextCursor = `${scoreVal}:${lastVideo.id}`;
         }
 
         return {
-            videos: videosToReturn.map((v) => ({
-                id: v.id,
-                source: v.source,
-                externalId: v.externalId,
-                title: v.title,
-                poster: v.poster,
-                description: v.description,
-                genres: v.genres,
-                releaseYear: v.releaseYear,
-                totalEpisodes: v.totalEpisodes,
-                viewsTotal: v.viewsTotal,
-                views24h: v.views24h,
-                score: v.viewsTotal,
-            })),
+            videos: videosToReturn.map(this.mapExploreIndexToTrending),
             nextCursor,
             hasMore,
         };
     }
 
-    // =========================================================================
-    // Private Methods
-    // =========================================================================
-
     /**
-     * Get videos by their Redis keys (source:externalId)
+     * Helper to map explore_index entry to TrendingVideo interface
      */
-    private async getVideosByKeys(keys: string[]): Promise<TrendingVideo[]> {
-        if (!db || keys.length === 0) return [];
-
-        // Parse keys into source+externalId pairs
-        const parsedKeys = keys
-            .map(CacheService.parseVideoKey)
-            .filter((k): k is { source: string; externalId: string } => k !== null);
-
-        if (parsedKeys.length === 0) return [];
-
-        // Build OR conditions for each key
-        const conditions = parsedKeys.map(
-            (k) => and(eq(videos.source, k.source), eq(videos.externalId, k.externalId))
-        );
-
-        const results = await db
-            .select({
-                id: videos.id,
-                source: videos.source,
-                externalId: videos.externalId,
-                title: videos.title,
-                poster: videos.poster,
-                description: videos.description,
-                genres: videos.genres,
-                releaseYear: videos.releaseYear,
-                totalEpisodes: videos.totalEpisodes,
-                viewsTotal: sql<number>`COALESCE(${videoStats.viewsTotal}, 0)`,
-                views24h: sql<number>`COALESCE(${videoStats.views24h}, 0)`,
-            })
-            .from(videos)
-            .leftJoin(videoStats, eq(videos.id, videoStats.videoId))
-            .where(sql`${conditions.map((c) => sql`(${c})`).reduce((a, b) => sql`${a} OR ${b}`)}`);
-
-        // Sort by original Redis order
-        return keys
-            .map((key) => {
-                const parsed = CacheService.parseVideoKey(key);
-                if (!parsed) return null;
-                return results.find(
-                    (r) => r.source === parsed.source && r.externalId === parsed.externalId
-                );
-            })
-            .filter((v): v is NonNullable<typeof v> => v !== null)
-            .map((v) => ({
-                ...v,
-                score: v.viewsTotal,
-            }));
-    }
-
-    /**
-     * Get trending from database (fallback)
-     */
-    private async getTrendingFromDb(limit: number): Promise<TrendingVideo[]> {
-        if (!db) return [];
-
-        const results = await db
-            .select({
-                id: videos.id,
-                source: videos.source,
-                externalId: videos.externalId,
-                title: videos.title,
-                poster: videos.poster,
-                description: videos.description,
-                genres: videos.genres,
-                releaseYear: videos.releaseYear,
-                totalEpisodes: videos.totalEpisodes,
-                viewsTotal: sql<number>`COALESCE(${videoStats.viewsTotal}, 0)`,
-                views24h: sql<number>`COALESCE(${videoStats.views24h}, 0)`,
-            })
-            .from(videos)
-            .leftJoin(videoStats, eq(videos.id, videoStats.videoId))
-            .orderBy(desc(sql`COALESCE(${videoStats.viewsTotal}, 0)`))
-            .limit(limit);
-
-        return results.map((v) => ({
-            ...v,
-            score: v.viewsTotal,
-        }));
-    }
-
-    /**
-     * Get hot from database (fallback)
-     */
-    private async getHotFromDb(limit: number): Promise<TrendingVideo[]> {
-        if (!db) return [];
-
-        const results = await db
-            .select({
-                id: videos.id,
-                source: videos.source,
-                externalId: videos.externalId,
-                title: videos.title,
-                poster: videos.poster,
-                description: videos.description,
-                genres: videos.genres,
-                releaseYear: videos.releaseYear,
-                totalEpisodes: videos.totalEpisodes,
-                viewsTotal: sql<number>`COALESCE(${videoStats.viewsTotal}, 0)`,
-                views24h: sql<number>`COALESCE(${videoStats.views24h}, 0)`,
-            })
-            .from(videos)
-            .leftJoin(videoStats, eq(videos.id, videoStats.videoId))
-            .orderBy(desc(sql`COALESCE(${videoStats.views24h}, 0)`))
-            .limit(limit);
-
-        return results.map((v) => ({
-            ...v,
-            score: v.views24h,
-        }));
+    private mapExploreIndexToTrending(entry: typeof exploreIndex.$inferSelect): TrendingVideo {
+        return {
+            id: entry.id,
+            source: entry.source,
+            externalId: entry.externalId,
+            title: entry.title,
+            poster: entry.poster,
+            description: entry.description,
+            genres: entry.genres,
+            releaseYear: entry.releaseYear,
+            totalEpisodes: entry.totalEpisodes,
+            // Use popularityScore as proxy for views in UI if needed, 
+            // or we could join with videoStats if strictly required, but we want to avoid joins.
+            // For now, let's just use popularityScore as "score" and 0 for views to indicate they are abstract.
+            viewsTotal: entry.popularityScore,
+            views24h: 0,
+            score: entry.popularityScore,
+        };
     }
 }
 

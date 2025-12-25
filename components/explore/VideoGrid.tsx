@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 
 interface VideoData {
     id: string | number;
+    externalId?: string; // For explore_index data
     source: string;
     title?: string;
     name?: string;

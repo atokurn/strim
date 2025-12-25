@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
-import { streamService, DEFAULT_SOURCE, SUPPORTED_SOURCES } from "@/lib/services/StreamService";
+import { streamService, DEFAULT_SOURCE } from "@/lib/services/StreamService";
+import { trendingService } from "@/lib/services/TrendingService";
 import HeroSection from "@/components/home/HeroSection";
 import ContinueWatching from "@/components/home/ContinueWatching";
 import MovieCard from "@/components/shared/MovieCard";
@@ -8,98 +9,26 @@ import MovieCard from "@/components/shared/MovieCard";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-    // Fetch aggregated home data from all sources
-    const aggregatedRes = await streamService.getAggregatedHome();
+    // Parallel Fetching:
+    // 1. Banners (External - Default Source)
+    // 2. Trending (Local DB - explore_index)
+    // 3. Latest (Local DB - explore_index)
 
-    // Track which sources returned data
-    const activeSources = new Set();
+    const [homeRes, trendingVideos, latestVideos] = await Promise.all([
+        streamService.getHome(DEFAULT_SOURCE).catch(() => ({ data: { banners: [] } })),
+        trendingService.getTrending(15),
+        trendingService.getHot(12)
+    ]);
 
-    // Combine data from all sources
-    let allBanners = [];
-    let allTrending = [];
-    let allLatest = [];
-
-    if (aggregatedRes.data?.sources) {
-        for (const { source, data } of aggregatedRes.data.sources) {
-            activeSources.add(source);
-            if (data.banners) {
-                allBanners.push(...data.banners.map(b => ({ ...b, source })));
-            }
-            if (data.trending) {
-                allTrending.push(...data.trending.map(t => ({ ...t, source })));
-            }
-            if (data.latest) {
-                allLatest.push(...data.latest.map(l => ({ ...l, source })));
-            }
-        }
-    }
-
-    // Fallback to single source if aggregation fails
-    if (allBanners.length === 0 && allTrending.length === 0) {
-        const homeRes = await streamService.getHome(DEFAULT_SOURCE);
-        if (homeRes.data) {
-            activeSources.add(DEFAULT_SOURCE);
-            allBanners = homeRes.data.banners || [];
-            allTrending = homeRes.data.trending || [];
-            allLatest = homeRes.data.latest || [];
-        }
-    }
-
-    if (allBanners.length === 0 && allTrending.length === 0 && allLatest.length === 0) {
-        return (
-            <div className="flex items-center justify-center min-h-screen text-white">
-                <p>Failed to load data. Please try again later.</p>
-            </div>
-        );
-    }
-
-    // Transform banners for HeroSection (add source info)
-    const banners = allBanners.slice(0, 5).map((b) => ({
+    // Banners from external source
+    const banners = (homeRes.data?.banners || []).slice(0, 5).map((b) => ({
         ...b,
         name: b.title,
     }));
 
-    // Dedupe by id + source
-    const dedupeVideos = (videos) => {
-        const seen = new Set();
-        return videos.filter((v) => {
-            const key = `${v.source}:${v.id}`;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-        });
-    };
-
-    // Interleave videos from different sources for balanced display
-    const interleaveBySource = (videos, limit) => {
-        const bySource = {};
-        videos.forEach(v => {
-            if (!bySource[v.source]) bySource[v.source] = [];
-            bySource[v.source].push(v);
-        });
-
-        const sources = Object.keys(bySource);
-        const result = [];
-        let index = 0;
-
-        while (result.length < limit) {
-            let added = false;
-            for (const source of sources) {
-                if (bySource[source][index]) {
-                    result.push(bySource[source][index]);
-                    added = true;
-                    if (result.length >= limit) break;
-                }
-            }
-            if (!added) break;
-            index++;
-        }
-
-        return result;
-    };
-
-    const trending = interleaveBySource(dedupeVideos(allTrending), 15);
-    const latest = interleaveBySource(dedupeVideos(allLatest), 12);
+    // Local data is already sorted and mixed by the explore_index logic
+    const trending = trendingVideos;
+    const latest = latestVideos;
 
     return (
         <div className="min-h-screen pb-24 bg-black">

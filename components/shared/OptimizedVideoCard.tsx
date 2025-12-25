@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 
 interface VideoData {
     id: string | number;
+    externalId?: string; // For explore_index data
     source: string;
     title?: string;
     name?: string;
@@ -40,7 +41,9 @@ const OptimizedVideoCard = memo(
         if (!video) return null;
 
         const source = video.source || "dramadash";
-        const href = `/drama/${source}/${video.id}`;
+        // Use externalId for URL if available (from explore_index), fallback to id
+        const videoId = video.externalId || video.id;
+        const href = `/drama/${source}/${videoId}`;
         const title = video.name || video.title || "Untitled";
         const poster = video.poster || video.img || "/placeholder-poster.jpg";
         const viewCount = video.viewCount || video.viewsTotal || 0;
