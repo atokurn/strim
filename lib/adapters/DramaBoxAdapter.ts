@@ -28,7 +28,7 @@ export class DramaBoxAdapter extends BaseAdapter {
     private async request<T>(endpoint: string): Promise<T> {
         const url = `${this.apiUrl}${endpoint}`;
         const res = await axios.get(url, {
-            timeout: 30000, // DramaBox /allepisode can be slow
+            timeout: 60000, // DramaBox /allepisode can be slow - increased to 60s
             headers: {
                 "User-Agent": "Mozilla/5.0 (compatible; Strim/1.0)",
                 Accept: "application/json",

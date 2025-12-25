@@ -7,7 +7,11 @@ import Redis from "ioredis";
 // =============================================================================
 // Redis Client Singleton
 // =============================================================================
-let redisClient: Redis | null = null;
+
+// Define global interface for development hot-reloading
+declare global {
+    var redis: Redis | undefined;
+}
 
 function getRedisClient(): Redis | null {
     if (!process.env.REDIS_URL) {
@@ -15,18 +19,52 @@ function getRedisClient(): Redis | null {
         return null;
     }
 
-    if (!redisClient) {
-        redisClient = new Redis(process.env.REDIS_URL, {
-            maxRetriesPerRequest: 3,
-            lazyConnect: true,
-        });
-
-        redisClient.on("error", (err) => {
-            console.error("[Redis] Connection error:", err.message);
-        });
+    // Reuse global instance if available (dev mode HMR fix)
+    if (global.redis) {
+        return global.redis;
     }
 
-    return redisClient;
+    const redisUrl = process.env.REDIS_URL;
+    const isUpstash = redisUrl.includes("upstash.io");
+
+    const client = new Redis(redisUrl, {
+        maxRetriesPerRequest: 3,
+        lazyConnect: true, // We will explicitly connect or let first command trigger it
+        connectTimeout: 20000, // Increased timeout
+        enableReadyCheck: false, // For serverless environments often better
+        // Upstash requires TLS
+        tls: isUpstash ? {} : undefined,
+        // Robust retry strategy
+        retryStrategy: (times) => {
+            // Wait 100ms, 200ms, 300ms, ..., up to 3s
+            const delay = Math.min(times * 100, 3000);
+            return delay;
+        },
+        reconnectOnError: (err) => {
+            const targetError = "READONLY";
+            if (err.message.includes(targetError)) {
+                // Only reconnect when the error starts with "READONLY"
+                return true;
+            }
+            return false;
+        },
+    });
+
+    client.on("error", (err) => {
+        // Suppress initial connection errors to allow app to start without Redis
+        console.warn("[Redis] Connection warning:", err.message);
+    });
+
+    client.on("connect", () => {
+        console.log("[Redis] Connected successfully");
+    });
+
+    // Save to global in development
+    if (process.env.NODE_ENV !== "production") {
+        global.redis = client;
+    }
+
+    return client;
 }
 
 // =============================================================================
@@ -67,11 +105,15 @@ export class CacheService {
      */
     async get<T>(key: string): Promise<T | null> {
         if (!this.redis) return null;
+        // Basic check if we are connected or connecting
+        if (this.redis.status === 'end') return null;
+
         try {
             const data = await this.redis.get(key);
             return data ? JSON.parse(data) : null;
         } catch (error) {
-            console.error("[Cache] Get error:", error);
+            // Quietly fail for cache errors
+            // console.warn("[Cache] Get error:", error); 
             return null;
         }
     }
@@ -80,7 +122,7 @@ export class CacheService {
      * Set cache with optional TTL
      */
     async set(key: string, value: unknown, ttlSeconds?: number): Promise<boolean> {
-        if (!this.redis) return false;
+        if (!this.redis || this.redis.status === 'end') return false;
         try {
             const data = JSON.stringify(value);
             if (ttlSeconds) {
@@ -90,7 +132,7 @@ export class CacheService {
             }
             return true;
         } catch (error) {
-            console.error("[Cache] Set error:", error);
+            // console.warn("[Cache] Set error:", error);
             return false;
         }
     }
@@ -333,7 +375,12 @@ export class CacheService {
     async close(): Promise<void> {
         if (this.redis) {
             await this.redis.quit();
-            redisClient = null;
+            this.redis = null;
+
+            // Cleanup global in dev
+            if (process.env.NODE_ENV !== "production") {
+                global.redis = undefined;
+            }
         }
     }
 }

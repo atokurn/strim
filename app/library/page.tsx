@@ -34,21 +34,17 @@ export default function LibraryPage() {
     return (
         <div className="min-h-screen bg-black text-white pb-20">
             {/* Header */}
-            <header className="fixed top-0 left-0 w-full z-50 bg-black/80 backdrop-blur-lg border-b border-white/10">
-                <div className="p-4 flex items-center gap-4">
-                    <Link href="/" className="p-2 hover:bg-white/10 rounded-full transition-colors">
-                        <ArrowLeft className="w-6 h-6" />
-                    </Link>
-                    <h1 className="text-xl font-bold">Perpustakaan</h1>
-                </div>
+            {/* Header */}
+            <header className="fixed top-0 left-0 w-full z-40 md:z-40 bg-black/80 backdrop-blur-lg border-b border-white/10 pt-4 md:top-16">
+
 
                 {/* Tabs */}
                 <div className="flex px-4 gap-6 overflow-x-auto no-scrollbar">
                     <button
                         onClick={() => setActiveTab("history")}
                         className={`pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === "history"
-                                ? "border-primary text-primary"
-                                : "border-transparent text-white/60 hover:text-white"
+                            ? "border-[#C2410C] text-[#C2410C]"
+                            : "border-transparent text-white/60 hover:text-white"
                             }`}
                     >
                         <Clock className="w-4 h-4" /> Riwayat
@@ -56,8 +52,8 @@ export default function LibraryPage() {
                     <button
                         onClick={() => setActiveTab("bookmarks")}
                         className={`pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === "bookmarks"
-                                ? "border-primary text-primary"
-                                : "border-transparent text-white/60 hover:text-white"
+                            ? "border-[#C2410C] text-[#C2410C]"
+                            : "border-transparent text-white/60 hover:text-white"
                             }`}
                     >
                         <Bookmark className="w-4 h-4" /> Koleksi
@@ -65,8 +61,8 @@ export default function LibraryPage() {
                     <button
                         onClick={() => setActiveTab("likes")}
                         className={`pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === "likes"
-                                ? "border-primary text-primary"
-                                : "border-transparent text-white/60 hover:text-white"
+                            ? "border-[#C2410C] text-[#C2410C]"
+                            : "border-transparent text-white/60 hover:text-white"
                             }`}
                     >
                         <Heart className="w-4 h-4" /> Disukai

@@ -17,6 +17,47 @@ export default function MovieCard({ movie, className }) {
     // Use source-aware routing if source is available, otherwise fallback to dramadash
     const source = movie.source || "dramadash";
     const href = `/drama/${source}/${movie.id}`;
+    const isHorizontal = className?.includes("horizontal") || movie.layout === "horizontal";
+
+    if (isHorizontal) {
+        return (
+            <Link
+                href={href}
+                className={cn(
+                    "group relative flex gap-3 overflow-hidden rounded-lg bg-secondary/50 hover:bg-white/5 transition-colors p-2",
+                    className
+                )}
+            >
+                <div className="relative aspect-[2/3] w-20 shrink-0 overflow-hidden rounded-md">
+                    <img
+                        src={movie.poster || movie.img}
+                        alt={movie.name || movie.title}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                    />
+                    <div className="absolute top-1 left-1">
+                        <span className="px-1 py-0.5 bg-black/70 text-white text-[8px] rounded uppercase backdrop-blur-sm">
+                            {source}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="flex flex-col justify-center min-w-0">
+                    <h3 className="text-white font-semibold line-clamp-1 text-base group-hover:text-primary transition-colors">
+                        {movie.name || movie.title}
+                    </h3>
+                    <div className="mt-1 flex items-center gap-2 text-xs text-white/50">
+                        <span>{movie.year || "2024"}</span>
+                        <span>•</span>
+                        <span className="capitalize">{movie.genres?.[0] || "Drama"}</span>
+                    </div>
+                    <div className="mt-2 text-xs text-white/50 line-clamp-2">
+                        {movie.description}
+                    </div>
+                </div>
+            </Link>
+        )
+    }
 
     return (
         <Link

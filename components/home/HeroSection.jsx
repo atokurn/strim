@@ -2,82 +2,75 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Play, Info } from "lucide-react";
 
 export default function HeroSection({ banners, source = "dramadash" }) {
-    const [currentBanner, setCurrentBanner] = useState(null);
+    const [currentIndex, setCurrentIndex] = useState(0);
 
+    // Auto-slide effect
     useEffect(() => {
-        if (banners && banners.length > 0) {
-            // Pick a random banner or the first one
-            setCurrentBanner(banners[0]);
-        }
+        if (!banners || banners.length === 0) return;
+
+        const interval = setInterval(() => {
+            setCurrentIndex((prev) => (prev + 1) % Math.min(banners.length, 5));
+        }, 5000);
+
+        return () => clearInterval(interval);
     }, [banners]);
+
+    const currentBanner = banners?.[currentIndex];
 
     if (!currentBanner) return null;
 
-    // Use source from banner if available, otherwise use prop
     const bannerSource = currentBanner.source || source;
     const dramaHref = `/drama/${bannerSource}/${currentBanner.id}`;
 
     return (
-        <div className="relative w-full h-[50vh] md:h-[80vh] bg-black">
+        <div className="relative w-full aspect-[3/4] md:h-[80vh] bg-black">
             {/* Background Image */}
             <div className="absolute inset-0">
                 <img
+                    key={currentBanner.poster} // key forces re-render for new image animation
                     src={currentBanner.poster}
                     alt={currentBanner.name || currentBanner.title}
-                    className="w-full h-full object-cover opacity-60"
+                    className="w-full h-full object-cover animate-in fade-in duration-700"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
-                <div className="absolute inset-0 bg-gradient-to-r from-background/80 via-transparent to-transparent" />
+                {/* Gradient Overlays */}
+                <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-90" />
             </div>
 
             {/* Content */}
-            <div className="relative h-full container mx-auto px-4 md:px-6 flex items-center">
-                <div className="max-w-2xl pt-20">
-                    {/* Source Badge */}
-                    <div className="mb-3">
-                        <span className="px-2 py-0.5 bg-primary/30 text-primary text-xs font-medium rounded uppercase backdrop-blur-sm">
-                            {bannerSource}
-                        </span>
-                    </div>
+            <div className="absolute inset-x-0 bottom-0 p-4 pb-8 flex flex-col items-start justify-end h-full pointer-events-none">
+                {/* Title */}
+                <h1 className="text-4xl md:text-5xl font-serif italic text-white mb-2 leading-none drop-shadow-lg opacity-90 animate-in slide-in-from-bottom-2 duration-500">
+                    {currentBanner.name || currentBanner.title}
+                </h1>
 
-                    {/* Tags/Genres */}
-                    <div className="flex flex-wrap gap-2 mb-4">
-                        {(currentBanner.genres || currentBanner.gendres || []).slice(0, 3).map((genre, idx) => (
-                            <span key={idx} className="bg-white/20 backdrop-blur-md px-2 py-1 rounded text-xs font-medium text-white">
-                                {genre}
-                            </span>
-                        ))}
-                    </div>
-
-                    <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 leading-tight">
-                        {currentBanner.name || currentBanner.title}
-                    </h1>
-
-                    <p className="text-white/80 text-sm md:text-lg mb-8 line-clamp-3 md:line-clamp-4 max-w-lg">
-                        {currentBanner.desc || currentBanner.description || "Experience the drama, romance, and excitement. Start watching now!"}
-                    </p>
-
-                    <div className="flex gap-4">
-                        <Link
-                            href={dramaHref}
-                            className="flex items-center gap-2 bg-white text-black px-6 py-3 rounded-md font-semibold hover:bg-white/90 transition-colors"
-                        >
-                            <Play className="w-5 h-5 fill-current" />
-                            Play Now
-                        </Link>
-                        <Link
-                            href={dramaHref}
-                            className="flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white px-6 py-3 rounded-md font-semibold hover:bg-white/30 transition-colors"
-                        >
-                            <Info className="w-5 h-5" />
-                            More Info
-                        </Link>
-                    </div>
+                {/* Subtitle / Tagline */}
+                <div className="flex items-center gap-2 text-white/90 text-sm font-medium drop-shadow-md animate-in slide-in-from-bottom-3 duration-700">
+                    <span>{currentBanner.desc || currentBanner.description || "Trending Drama Series"}</span>
+                    <span className="text-blue-300">❄️</span>
                 </div>
             </div>
+
+            {/* Pagination Dots (Clickable) */}
+            <div className="absolute bottom-4 right-4 flex gap-1.5 z-20">
+                {banners.slice(0, 5).map((_, idx) => (
+                    <button
+                        key={idx}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            setCurrentIndex(idx);
+                        }}
+                        className={`h-1.5 rounded-full transition-all duration-300 ${currentIndex === idx ? "w-6 bg-white" : "w-1.5 bg-white/40 hover:bg-white/60"
+                            }`}
+                        aria-label={`Go to slide ${idx + 1}`}
+                    />
+                ))}
+            </div>
+
+            {/* Clickable Area Overlay */}
+            <Link href={dramaHref} className="absolute inset-0 z-10" />
         </div>
     );
 }

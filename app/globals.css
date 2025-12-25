@@ -62,9 +62,14 @@ body {
   font-feature-settings: "rlig" 1, "calt" 1;
 }
 
-/* Force dark mode for a streaming app usually feels better, but observing media query is okay too. 
-   Actually, let's force dark mode or a very dark theme by default, but respect system for now 
-   as configured above. However, streaming apps are often dark mode first. 
-   I will override the defaults to make the "default" look dark if I wanted, 
-   but sticking to standard configuration is safer.
-*/
+/* Utilities */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
