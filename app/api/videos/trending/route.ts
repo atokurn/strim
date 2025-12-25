@@ -2,10 +2,11 @@
 // Trending Videos API Route
 // GET /api/videos/trending?limit=20
 // Returns videos sorted by total view count (Redis sorted set + DB fallback)
+// LOCAL ONLY - no external API calls
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { aggregatorService } from "@/lib/services/AggregatorService";
+import { trendingService } from "@/lib/services/TrendingService";
 
 export const revalidate = 60; // Cache for 1 minute (trending changes faster)
 
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "20", 10);
 
     try {
-        const videos = await aggregatorService.getTrending(Math.min(limit, 50));
+        const videos = await trendingService.getTrending(Math.min(limit, 50));
 
         return NextResponse.json(
             {
@@ -36,3 +37,4 @@ export async function GET(request: NextRequest) {
         );
     }
 }
+

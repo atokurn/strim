@@ -1,13 +1,13 @@
 // =============================================================================
 // Explore Videos API Route - Cursor-based pagination
-// GET /api/videos/explore?cursor=<cursor>&limit=20&source=all
+// GET /api/videos/explore?cursor=<cursor>&limit=20&source=all&sortBy=latest
+// LOCAL ONLY - no external API calls
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { aggregatorService } from "@/lib/services/AggregatorService";
+import { trendingService } from "@/lib/services/TrendingService";
 import { cacheService } from "@/lib/cache/redis";
-import type { SourceType } from "@/lib/types";
-import type { CursorPaginatedResult } from "@/lib/services/AggregatorService";
+import type { CursorPaginatedResult } from "@/lib/services/TrendingService";
 
 export const revalidate = 0; // No static caching - cursor-based pagination is dynamic
 
@@ -17,9 +17,9 @@ const CACHE_TTL = 300; // 5 minutes
 /**
  * Build cache key for cursor-based explore results
  */
-function buildCacheKey(cursor: string | null, source: string, limit: number): string {
+function buildCacheKey(cursor: string | null, source: string, sortBy: string, limit: number): string {
     const cursorPart = cursor || "first";
-    return `cache:explore:${source}:${cursorPart}:${limit}`;
+    return `cache:explore:${source}:${sortBy}:${cursorPart}:${limit}`;
 }
 
 export async function GET(request: NextRequest) {
@@ -27,12 +27,13 @@ export async function GET(request: NextRequest) {
 
     const cursor = searchParams.get("cursor") || null;
     const limit = Math.min(parseInt(searchParams.get("limit") || "20", 10), 50); // Cap at 50
-    const source = searchParams.get("source") as SourceType | null;
+    const source = searchParams.get("source") || undefined;
+    const sortBy = (searchParams.get("sortBy") as "latest" | "popular" | "hot") || "latest";
     const sourceKey = source || "all";
 
     try {
         // Check cache first
-        const cacheKey = buildCacheKey(cursor, sourceKey, limit);
+        const cacheKey = buildCacheKey(cursor, sourceKey, sortBy, limit);
         const cachedResult = await cacheService.get<CursorPaginatedResult>(cacheKey);
 
         if (cachedResult) {
@@ -52,11 +53,12 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Fetch from service
-        const result = await aggregatorService.getVideosByCursor({
+        // Fetch from local TrendingService (no external API calls)
+        const result = await trendingService.getExplore({
             limit,
             cursor,
-            source: source || undefined,
+            source,
+            sortBy,
         });
 
         // Cache the result
@@ -84,3 +86,4 @@ export async function GET(request: NextRequest) {
         );
     }
 }
+

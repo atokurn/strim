@@ -2,10 +2,11 @@
 // Hot Videos API Route
 // GET /api/videos/hot?limit=20
 // Returns videos with time-weighted 24h view scoring
+// LOCAL ONLY - no external API calls
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { aggregatorService } from "@/lib/services/AggregatorService";
+import { trendingService } from "@/lib/services/TrendingService";
 
 export const revalidate = 60; // Cache for 1 minute
 
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "20", 10);
 
     try {
-        const videos = await aggregatorService.getHot(Math.min(limit, 50));
+        const videos = await trendingService.getHot(Math.min(limit, 50));
 
         return NextResponse.json(
             {
@@ -36,3 +37,4 @@ export async function GET(request: NextRequest) {
         );
     }
 }
+
