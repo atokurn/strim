@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,11 +30,12 @@ export default function MovieCard({ movie, className }) {
                 )}
             >
                 <div className="relative aspect-[2/3] w-20 shrink-0 overflow-hidden rounded-md">
-                    <img
+                    <Image
                         src={movie.poster || movie.img}
                         alt={movie.name || movie.title}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
+                        fill
+                        sizes="80px"
+                        className="object-cover"
                     />
                     <div className="absolute top-1 left-1">
                         <span className="px-1 py-0.5 bg-black/70 text-white text-[8px] rounded uppercase backdrop-blur-sm">
@@ -67,11 +69,12 @@ export default function MovieCard({ movie, className }) {
                 className
             )}
         >
-            <img
+            <Image
                 src={movie.poster || movie.img}
                 alt={movie.name || movie.title}
-                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
-                loading="lazy"
+                fill
+                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                className="object-cover transition-transform duration-300 group-hover:scale-110"
             />
 
             {/* Source Badge */}

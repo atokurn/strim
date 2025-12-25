@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function HeroSection({ banners, source = "dramadash" }) {
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -26,13 +27,16 @@ export default function HeroSection({ banners, source = "dramadash" }) {
 
     return (
         <div className="relative w-full aspect-[3/4] md:h-[80vh] bg-black">
-            {/* Background Image */}
+            {/* Background Image - LCP Critical Element */}
             <div className="absolute inset-0">
-                <img
-                    key={currentBanner.poster} // key forces re-render for new image animation
+                <Image
+                    key={currentBanner.poster}
                     src={currentBanner.poster}
                     alt={currentBanner.name || currentBanner.title}
-                    className="w-full h-full object-cover animate-in fade-in duration-700"
+                    fill
+                    sizes="100vw"
+                    priority={currentIndex === 0}
+                    className="object-cover animate-in fade-in duration-700"
                 />
                 {/* Gradient Overlays */}
                 <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black" />

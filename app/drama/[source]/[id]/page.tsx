@@ -5,10 +5,12 @@
 
 import { streamService } from "@/lib/services/StreamService";
 import Link from "next/link";
+import Image from "next/image";
 import { Play } from "lucide-react";
 import type { SourceType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 300; // ISR: 5 minutes
 
 interface DramaPageProps {
     params: Promise<{
@@ -47,19 +49,26 @@ export default async function DramaPage({ params }: DramaPageProps) {
             {/* Header / Backdrop */}
             <div className="relative w-full aspect-video md:h-[60vh] md:aspect-auto">
                 <div className="absolute inset-0 bg-black/50" />
-                <img
+                <Image
                     src={drama.poster}
                     alt={drama.title}
-                    className="w-full h-full object-cover opacity-50 blur-sm"
+                    fill
+                    sizes="100vw"
+                    className="object-cover opacity-50 blur-sm"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
 
                 <div className="absolute bottom-0 left-0 w-full container mx-auto px-4 md:px-6 pb-8 md:pb-12 flex flex-col md:flex-row gap-8 items-end">
-                    <img
-                        src={drama.poster}
-                        alt={drama.title}
-                        className="hidden md:block w-48 rounded-lg shadow-2xl z-10"
-                    />
+                    <div className="hidden md:block relative w-48 aspect-[2/3] rounded-lg shadow-2xl z-10 overflow-hidden">
+                        <Image
+                            src={drama.poster}
+                            alt={drama.title}
+                            fill
+                            sizes="192px"
+                            priority
+                            className="object-cover"
+                        />
+                    </div>
                     <div className="flex-1 space-y-4">
                         <div className="flex items-center gap-2">
                             <span className="px-2 py-0.5 bg-primary/20 text-primary text-xs font-medium rounded uppercase">

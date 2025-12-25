@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { streamService, DEFAULT_SOURCE, SUPPORTED_SOURCES } from "@/lib/services/StreamService";
 import HeroSection from "@/components/home/HeroSection";
 import ContinueWatching from "@/components/home/ContinueWatching";
@@ -123,10 +124,12 @@ export default async function Home() {
                                     href={`/drama/${movie.source}/${movie.id}`}
                                     className="flex-shrink-0 w-28 md:w-40 relative group aspect-[3/4] rounded-lg overflow-hidden block bg-white/5"
                                 >
-                                    <img
+                                    <Image
                                         src={movie.poster}
                                         alt={movie.title}
-                                        className="w-full h-full object-cover"
+                                        fill
+                                        sizes="(max-width: 768px) 112px, 160px"
+                                        className="object-cover"
                                     />
                                     {/* Rank Number Overlay */}
                                     <div className="absolute -bottom-6 -right-2 text-[80px] font-bold text-white/20 italic font-serif leading-none select-none pointer-events-none stroke-black">
@@ -162,10 +165,12 @@ export default async function Home() {
                                 >
                                     {/* Image Container */}
                                     <div className="relative aspect-[3/4] rounded-lg overflow-hidden bg-[#1e1e1e]">
-                                        <img
+                                        <Image
                                             src={movie.poster}
                                             alt={movie.title}
-                                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                                            fill
+                                            sizes="(max-width: 768px) 33vw, 25vw"
+                                            className="object-cover transition-transform duration-300 group-hover:scale-110"
                                         />
 
                                         {/* Top Overlay: Badges */}

@@ -24,6 +24,7 @@ interface Video {
     viewsTotal?: number;
     year?: string | number;
     genres?: string[];
+    [key: string]: unknown; // Index signature for VideoData compatibility
 }
 
 // =============================================================================
@@ -36,7 +37,7 @@ function ExploreContent() {
 
     // State for Peringkat
     const [rankSource, setRankSource] = useState("all");
-    const [rankings, setRankings] = useState < Video[] > ([]);
+    const [rankings, setRankings] = useState<Video[]>([]);
     const [loadingRank, setLoadingRank] = useState(true);
 
     // State for Jelajah (Infinite Scroll)
@@ -44,9 +45,9 @@ function ExploreContent() {
     const [exploreSource, setExploreSource] = useState("all");
     const [exploreGenre, setExploreGenre] = useState("all");
     const [exploreYear, setExploreYear] = useState("all");
-    const [exploreVideos, setExploreVideos] = useState < Video[] > ([]);
+    const [exploreVideos, setExploreVideos] = useState<Video[]>([]);
     const [loadingExplore, setLoadingExplore] = useState(false);
-    const [nextCursor, setNextCursor] = useState < string | null > (null);
+    const [nextCursor, setNextCursor] = useState<string | null>(null);
     const [hasMore, setHasMore] = useState(true);
     const [initialLoadDone, setInitialLoadDone] = useState(false);
 
