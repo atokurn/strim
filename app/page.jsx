@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { streamService, DEFAULT_SOURCE, SUPPORTED_SOURCES } from "@/lib/services/StreamService";
 import HeroSection from "@/components/home/HeroSection";
-import HomeHeader from "@/components/home/HomeHeader";
 import ContinueWatching from "@/components/home/ContinueWatching";
 import MovieCard from "@/components/shared/MovieCard";
 
@@ -99,15 +98,10 @@ export default async function Home() {
     };
 
     const trending = interleaveBySource(dedupeVideos(allTrending), 15);
-    const latest = interleaveBySource(dedupeVideos(allLatest), 10);
+    const latest = interleaveBySource(dedupeVideos(allLatest), 12);
 
     return (
         <div className="min-h-screen pb-24 bg-black">
-            {/* Header Overlay - Mobile Only */}
-            <div className="absolute top-0 left-0 w-full z-20 md:hidden">
-                <HomeHeader />
-            </div>
-
             {/* Hero Carousel */}
             <HeroSection banners={banners} source={banners[0]?.source || DEFAULT_SOURCE} />
 
@@ -164,26 +158,55 @@ export default async function Home() {
                                 <Link
                                     key={`latest-${movie.id}`}
                                     href={`/drama/${movie.source}/${movie.id}`}
-                                    className="relative group aspect-[3/4] rounded-lg overflow-hidden block"
+                                    className="group block space-y-2"
                                 >
-                                    <img
-                                        src={movie.poster}
-                                        alt={movie.title}
-                                        className="w-full h-full object-cover"
-                                    />
-                                    <div className="absolute top-2 right-2">
-                                        {index % 2 === 0 ? (
-                                            <span className="bg-[#C2410C] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-sm">
-                                                Trailer
-                                            </span>
-                                        ) : (
-                                            <span className="bg-[#EDB359] text-black text-[10px] font-bold px-1.5 py-0.5 rounded-sm">
-                                                VIP
-                                            </span>
-                                        )}
+                                    {/* Image Container */}
+                                    <div className="relative aspect-[3/4] rounded-lg overflow-hidden bg-[#1e1e1e]">
+                                        <img
+                                            src={movie.poster}
+                                            alt={movie.title}
+                                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                                        />
+
+                                        {/* Top Overlay: Badges */}
+                                        <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
+                                            {/* Trending Badge Removed */}{null}
+                                            {/* Status Badge */}
+                                            {index % 2 === 0 ? (
+                                                <span className="bg-[#C2410C] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-sm shadow-md">
+                                                    Trailer
+                                                </span>
+                                            ) : (
+                                                <span className="bg-[#EDB359] text-black text-[10px] font-bold px-1.5 py-0.5 rounded-sm shadow-md">
+                                                    VIP
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Bottom Overlay: View Count */}
+                                        <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/90 to-transparent">
+                                            <div className="flex items-center gap-1.5 text-[10px] text-white/90 font-medium">
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                                                    <circle cx="12" cy="12" r="3" />
+                                                </svg>
+                                                <span>{movie.viewCount ? (movie.viewCount >= 1000 ? `${(movie.viewCount / 1000).toFixed(1)}K` : movie.viewCount) : "1.2K"}</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/90 to-transparent">
-                                        <h3 className="text-xs text-white font-medium line-clamp-2 leading-tight">{movie.title}</h3>
+
+                                    {/* Footer Info */}
+                                    <div className="space-y-0.5">
+                                        <h3 className="text-white text-sm font-semibold line-clamp-1 group-hover:text-[#E5B560] transition-colors">{movie.title}</h3>
+                                        <div className="flex items-center gap-2 text-[10px] text-white/50">
+                                            <span className="capitalize">{movie.source}</span>
+                                            {(movie.totalEpisodes || movie.episodes?.length) ? (
+                                                <>
+                                                    <span className="w-0.5 h-0.5 rounded-full bg-white/50" />
+                                                    <span>{movie.totalEpisodes || movie.episodes?.length} Eps</span>
+                                                </>
+                                            ) : null}
+                                        </div>
                                     </div>
                                 </Link>
                             ))}

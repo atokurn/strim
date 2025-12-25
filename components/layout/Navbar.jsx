@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Search, Menu, X, PlayCircle, Play } from "lucide-react";
+import { Search, Menu, X, PlayCircle, Play, Cast } from "lucide-react";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -94,13 +94,13 @@ export default function Navbar() {
     return (
         <nav
             className={cn(
-                "fixed top-0 z-50 w-full transition-all duration-300 hidden md:block",
+                "fixed top-0 z-50 w-full transition-all duration-300",
                 isScrolled
                     ? "bg-background/95 backdrop-blur-md border-b border-white/10"
                     : "bg-gradient-to-b from-black/90 to-transparent"
             )}
         >
-            <div className="mx-auto px-4 md:px-6">
+            <div className="hidden md:block mx-auto px-4 md:px-6">
                 <div className="flex h-16 items-center justify-between gap-4">
                     {/* Left: Logo & Main Nav */}
                     <div className="flex items-center gap-8 overflow-hidden">
@@ -204,9 +204,34 @@ export default function Navbar() {
                 </div>
             </div>
 
+            {/* Mobile Top Header */}
+            <div className="md:hidden w-full h-16 flex items-center gap-2 px-3">
+                {/* Search Bar */}
+                <div className="relative flex-1 min-w-0">
+                    <input
+                        type="text"
+                        placeholder="Cari Drama ..."
+                        className="w-full bg-[#1e1e1e] text-white/90 text-sm rounded-full pl-12 pr-4 py-2 border border-white/10 focus:outline-none focus:border-white/30 transition-all placeholder:text-white/50"
+                    />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50 pointer-events-none" />
+                </div>
+
+
+
+                {/* Cast Button */}
+                <button className="flex-shrink-0 w-9 h-9 flex items-center justify-center text-white/80 hover:text-white rounded-full hover:bg-white/10 transition-colors">
+                    <Cast className="w-5 h-5" />
+                </button>
+
+                {/* VIP Button */}
+                <button className="flex-shrink-0 bg-[#E5B560] hover:bg-[#d4a450] text-black text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-lg shadow-[#E5B560]/20 whitespace-nowrap">
+                    + VIP
+                </button>
+            </div>
+
             {/* Mobile Menu */}
             {isMobileMenuOpen && (
-                <div className="md:hidden bg-background border-b border-white/10">
+                <div className="md:hidden fixed top-16 w-full bg-background border-b border-white/10 z-40">
                     <div className="px-4 py-4 space-y-4">
                         <Link
                             href="/"

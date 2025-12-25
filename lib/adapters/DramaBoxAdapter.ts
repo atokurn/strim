@@ -56,10 +56,13 @@ export class DramaBoxAdapter extends BaseAdapter {
                     ? this.transformDramaList(trendingRes.value)
                     : [];
 
-            const latest =
+            let latest =
                 latestRes.status === "fulfilled"
                     ? this.transformDramaList(latestRes.value)
                     : [];
+
+            // Enrich top items to get episode count
+            latest = await this.enrichWithDetails(latest);
 
             const banners =
                 forYouRes.status === "fulfilled"
@@ -150,6 +153,28 @@ export class DramaBoxAdapter extends BaseAdapter {
             console.error("[DramaBox] Error fetching episode:", err);
             return { status: 500, data: null, error: String(err) };
         }
+    }
+
+    // =============================================================================
+    // Private Enrichment Methods
+    // =============================================================================
+
+    private async enrichWithDetails(dramas: NormalizedDrama[]): Promise<NormalizedDrama[]> {
+        const enriched = [...dramas];
+        // Only enrich top 15 to avoid API rate limits/slowness
+        const itemsToEnrich = enriched.slice(0, 15);
+
+        const details = await Promise.allSettled(
+            itemsToEnrich.map(item => this.getDrama(item.id))
+        );
+
+        details.forEach((result, index) => {
+            if (result.status === "fulfilled" && result.value.status === 200 && result.value.data) {
+                enriched[index].totalEpisodes = result.value.data.totalEpisodes;
+            }
+        });
+
+        return enriched;
     }
 
     // =============================================================================

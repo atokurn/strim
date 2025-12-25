@@ -100,10 +100,13 @@ export class DramaDashAdapter extends BaseAdapter {
             );
 
             // Transform drama list (flatten nested lists)
-            const latest: NormalizedDrama[] = dramaList
+            let latest: NormalizedDrama[] = dramaList
                 .filter((item) => Array.isArray(item.list))
                 .flatMap((item) => item.list)
                 .map((item) => this.transformDrama(item));
+
+            // Enrich top items with detail data to get episode count
+            latest = await this.enrichWithDetails(latest);
 
             return {
                 status: 200,
@@ -184,6 +187,29 @@ export class DramaDashAdapter extends BaseAdapter {
             console.error("[DramaDash] Error fetching episode:", err);
             return { status: 500, data: null, error: String(err) };
         }
+    }
+
+    // =============================================================================
+    // Private Enrichment Methods
+    // =============================================================================
+
+    private async enrichWithDetails(dramas: NormalizedDrama[]): Promise<NormalizedDrama[]> {
+        const enriched = [...dramas];
+        // Only enrich top 15 to avoid API rate limits/slowness
+        // This ensures the first screen of items has episode counts
+        const itemsToEnrich = enriched.slice(0, 15);
+
+        const details = await Promise.allSettled(
+            itemsToEnrich.map(item => this.getDrama(item.id))
+        );
+
+        details.forEach((result, index) => {
+            if (result.status === "fulfilled" && result.value.status === 200 && result.value.data) {
+                enriched[index].totalEpisodes = result.value.data.totalEpisodes;
+            }
+        });
+
+        return enriched;
     }
 
     // =============================================================================
