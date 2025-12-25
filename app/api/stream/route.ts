@@ -65,6 +65,11 @@ export async function GET(request: NextRequest) {
             );
         }
 
+        // Record view asynchronously (don't block response)
+        import("@/lib/services/AggregatorService").then(({ aggregatorService }) => {
+            aggregatorService.recordView(source, id).catch(console.error);
+        });
+
         return NextResponse.json(result, {
             headers: {
                 "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
