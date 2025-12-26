@@ -50,7 +50,7 @@ export default async function Home() {
                             {trending.map((movie, index) => (
                                 <Link
                                     key={`trending-${movie.id}`}
-                                    href={`/drama/${movie.source}/${movie.id}`}
+                                    href={`/drama/${movie.source}/${movie.externalId || movie.id}`}
                                     className="flex-shrink-0 w-28 md:w-40 relative group aspect-[3/4] rounded-lg overflow-hidden block bg-white/5"
                                 >
                                     <Image
@@ -89,7 +89,7 @@ export default async function Home() {
                             {latest.map((movie, index) => (
                                 <Link
                                     key={`latest-${movie.id}`}
-                                    href={`/drama/${movie.source}/${movie.id}`}
+                                    href={`/drama/${movie.source}/${movie.externalId || movie.id}`}
                                     className="group block space-y-2"
                                 >
                                     {/* Image Container */}

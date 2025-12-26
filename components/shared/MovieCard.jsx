@@ -50,8 +50,20 @@ export default function MovieCard({ movie, className }) {
                     </h3>
                     <div className="mt-1 flex items-center gap-2 text-xs text-white/50">
                         <span>{movie.year || "2024"}</span>
+                        {movie.totalEpisodes > 0 && (
+                            <>
+                                <span>•</span>
+                                <span>{movie.totalEpisodes} Eps</span>
+                            </>
+                        )}
                         <span>•</span>
-                        <span className="capitalize">{movie.genres?.[0] || "Drama"}</span>
+                        <span className="capitalize">
+                            {Array.isArray(movie.genres)
+                                ? movie.genres[0]
+                                : typeof movie.genres === 'string' && movie.genres.startsWith('[')
+                                    ? JSON.parse(movie.genres)[0]
+                                    : movie.genres || "Drama"}
+                        </span>
                     </div>
                     <div className="mt-2 text-xs text-white/50 line-clamp-2">
                         {movie.description}

@@ -135,6 +135,11 @@ export const exploreIndex = pgTable(
         latestIdx: index("explore_latest_idx").on(table.latestScore),
         ratingIdx: index("explore_rating_idx").on(table.ratingScore),
         sourceIdx: index("explore_source_idx").on(table.source),
+
+        // Composite indexes for filtering by source AND sorting
+        sourcePopularityIdx: index("explore_source_popularity_idx").on(table.source, table.popularityScore),
+        sourceLatestIdx: index("explore_source_latest_idx").on(table.source, table.latestScore),
+        sourceRatingIdx: index("explore_source_rating_idx").on(table.source, table.ratingScore),
     })
 );
 
